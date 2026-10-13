@@ -1,8 +1,10 @@
 
+from datetime import datetime
+
 import pandas as pd
 import streamlit as st
 
-from database import add_courses, get_courses, initialize_database
+from database import add_courses, add_task, get_courses, get_tasks, initialize_database
 
 
 st.set_page_config(
@@ -75,7 +77,6 @@ if submitted:
         raw_name = str(row.get("Course Name", "") or "").strip()
         raw_credits = row.get("Credits")
 
-        # Ignore completely empty rows.
         if not raw_code and not raw_name:
             continue
 
@@ -143,7 +144,6 @@ if submitted:
             if not added_count and not skipped:
                 st.info("No new courses were added.")
 
-            # Clear the entry table after a successful database operation.
             st.session_state.course_rows = pd.DataFrame(
                 [{"Course Code": "", "Course Name": "", "Credits": 3.0}]
             )
@@ -186,3 +186,79 @@ else:
     st.info(
         "No courses registered yet. Add your semester courses above."
     )
+
+st.divider()
+
+st.header("Task Planner")
+
+if courses:
+    with st.form("task_registration_form"):
+        task_course = st.selectbox(
+            "Course",
+            options=[course["course_code"] for course in courses],
+        )
+        task_title = st.text_input("Task title")
+        task_type = st.selectbox(
+            "Task type",
+            options=["Assignment", "Reading", "Quiz", "Project", "Exam", "Other"],
+        )
+        deadline_date = st.date_input("Deadline date")
+        deadline_time = st.time_input("Deadline time", value=datetime.strptime("18:00", "%H:%M").time())
+        estimated_minutes = st.number_input(
+            "Estimated minutes",
+            min_value=0,
+            max_value=1440,
+            value=60,
+            step=15,
+        )
+        task_priority = st.selectbox(
+            "Priority",
+            options=["Low", "Medium", "High"],
+        )
+        task_status = st.selectbox(
+            "Status",
+            options=["Pending", "In Progress", "Completed"],
+        )
+        task_submitted = st.form_submit_button("Save Task")
+
+    if task_submitted:
+        if not task_title.strip():
+            st.warning("Task title is required.")
+        else:
+            deadline = datetime.combine(deadline_date, deadline_time).isoformat(timespec="seconds")
+            task_payload = {
+                "course_code": task_course,
+                "title": task_title,
+                "task_type": task_type,
+                "deadline": deadline,
+                "estimated_minutes": int(estimated_minutes),
+                "priority": task_priority.lower(),
+                "status": task_status.lower().replace(" ", "_"),
+            }
+            try:
+                task = add_task(task_payload)
+                st.success(f"Saved task #{task['task_id']}: {task['title']}")
+            except ValueError as error:
+                st.error(f"Could not save task: {error}")
+
+    tasks = get_tasks()
+    if tasks:
+        task_rows = [dict(task) for task in tasks]
+        task_table = pd.DataFrame(task_rows).rename(
+            columns={
+                "task_id": "Task ID",
+                "course_code": "Course",
+                "title": "Title",
+                "task_type": "Type",
+                "deadline": "Deadline",
+                "estimated_minutes": "Estimated Minutes",
+                "status": "Status",
+                "priority": "Priority",
+                "created_at": "Created At",
+            }
+        )
+        st.dataframe(task_table, use_container_width=True, hide_index=True)
+    else:
+        st.info("No tasks yet. Add one above.")
+else:
+    st.info("Add at least one course before creating tasks.")
