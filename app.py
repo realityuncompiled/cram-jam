@@ -4,8 +4,15 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from database import add_courses, add_task, get_courses, get_tasks, initialize_database
-
+from database import (
+    add_courses,
+    add_task,
+    add_study_session,
+    get_courses,
+    get_study_sessions,
+    get_tasks,
+    initialize_database,
+)
 
 st.set_page_config(
     page_title="Cram Jam",
@@ -262,3 +269,104 @@ if courses:
         st.info("No tasks yet. Add one above.")
 else:
     st.info("Add at least one course before creating tasks.")
+
+st.divider()
+
+st.header("Study Sessions")
+
+st.write(
+    "Record the time you spend studying. "
+    "Your sessions will be saved locally."
+)
+
+if courses:
+    with st.form("study_session_form"):
+        session_course = st.selectbox(
+            "Course",
+            options=[course["course_code"] for course in courses],
+            key="session_course",
+        )
+
+        session_date = st.date_input(
+            "Study date",
+            key="session_date",
+        )
+
+        duration_minutes = st.number_input(
+            "Duration (minutes)",
+            min_value=1,
+            max_value=1440,
+            value=50,
+            step=5,
+            key="session_duration",
+        )
+
+        session_submitted = st.form_submit_button(
+            "Save Study Session"
+        )
+
+    if session_submitted:
+        session_payload = {
+            "course_code": session_course,
+            "session_date": session_date,
+            "duration_minutes": int(duration_minutes),
+        }
+
+        try:
+            session = add_study_session(session_payload)
+            st.success(
+                f"Saved study session #{session['session_id']} "
+                f"for {session['course_code']} "
+                f"({session['duration_minutes']} minutes)."
+            )
+        except (ValueError, KeyError, TypeError) as error:
+            st.error(f"Could not save study session: {error}")
+
+    st.subheader("Study History")
+
+    history_filter = st.selectbox(
+        "Filter by course",
+        options=["All courses"] + [
+            course["course_code"] for course in courses
+        ],
+        key="history_filter",
+    )
+
+    selected_course = (
+        None if history_filter == "All courses"
+        else history_filter
+    )
+
+    sessions = get_study_sessions(selected_course)
+
+    if sessions:
+        session_table = pd.DataFrame(
+            [dict(session) for session in sessions]
+        ).rename(
+            columns={
+                "session_id": "Session ID",
+                "course_code": "Course",
+                "session_date": "Study Date",
+                "duration_minutes": "Duration (minutes)",
+            }
+        )
+
+        st.dataframe(
+            session_table,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        total_minutes = sum(
+            session["duration_minutes"] for session in sessions
+        )
+
+        st.caption(
+            f"{len(sessions)} session(s) · "
+            f"{total_minutes} minutes recorded"
+        )
+    else:
+        st.info("No study sessions recorded for this selection yet.")
+
+else:
+    st.info("Add at least one course before recording study sessions.")

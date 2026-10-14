@@ -386,6 +386,65 @@ def get_tasks(course_code=None):
         return connection.execute(query, params).fetchall()
 
 
+def add_study_session(session):
+    required_fields = ("course_code", "session_date", "duration_minutes")
+
+    for field_name in required_fields:
+        if field_name not in session or session[field_name] in (None, ""):
+            raise ValueError(f"{field_name} is required.")
+
+    course_code = normalize_course_code(session["course_code"])
+    session_date = normalize_datetime(session["session_date"], "session_date")
+
+    raw_duration = session["duration_minutes"]
+    try:
+        duration_minutes = int(raw_duration)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            "Duration must be a whole number of minutes."
+        ) from exc
+    if isinstance(raw_duration, float) and not raw_duration.is_integer():
+        raise ValueError("Duration must be a whole number of minutes.")
+
+    if duration_minutes <= 0:
+        raise ValueError("Duration must be greater than zero.")
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO study_sessions (
+                course_code,
+                session_date,
+                duration_minutes
+            ) VALUES (?, ?, ?)
+            """,
+            (course_code, session_date, duration_minutes),
+        )
+
+        session_id = connection.execute(
+            "SELECT last_insert_rowid()"
+        ).fetchone()[0]
+
+        return connection.execute(
+            "SELECT * FROM study_sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+
+
+def get_study_sessions(course_code=None):
+    query = "SELECT * FROM study_sessions"
+    params = []
+
+    if course_code is not None:
+        query += " WHERE course_code = ?"
+        params.append(normalize_course_code(course_code))
+
+    query += " ORDER BY session_date DESC, session_id DESC"
+
+    with get_connection() as connection:
+        return connection.execute(query, params).fetchall()
+
+
 if __name__ == "__main__":
     initialize_database()
     print(f"Database initialized at: {DB_PATH}")
