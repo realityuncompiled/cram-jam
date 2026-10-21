@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import date, datetime, time
 
 import pandas as pd
 import streamlit as st
@@ -12,6 +12,9 @@ from database import (
     get_study_sessions,
     get_tasks,
     initialize_database,
+    add_schedule_entry,
+    delete_schedule_entry,
+    get_schedule_entries,
 )
 
 st.set_page_config(
@@ -193,6 +196,153 @@ else:
     st.info(
         "No courses registered yet. Add your semester courses above."
     )
+
+st.divider()
+
+st.header("Weekly Routine")
+
+st.write(
+    "Add recurring lectures, labs, and tutorials. "
+    "For bi-weekly sessions, choose the date of the first meeting."
+)
+
+if courses:
+    day_names = [
+        "Monday", "Tuesday", "Wednesday", "Thursday",
+        "Friday", "Saturday", "Sunday",
+    ]
+
+    with st.form("weekly_schedule_form"):
+        schedule_course = st.selectbox(
+            "Course",
+            options=[course["course_code"] for course in courses],
+            key="schedule_course",
+        )
+
+        schedule_type = st.selectbox(
+            "Session type",
+            options=["Lecture", "Lab", "Tutorial", "Other"],
+            key="schedule_type",
+        )
+
+        schedule_day_name = st.selectbox(
+            "Day",
+            options=day_names,
+            key="schedule_day",
+        )
+        schedule_day = day_names.index(schedule_day_name)
+
+        schedule_start = st.time_input(
+            "Start time",
+            value=time(9, 0),
+            key="schedule_start",
+        )
+        schedule_end = st.time_input(
+            "End time",
+            value=time(10, 0),
+            key="schedule_end",
+        )
+
+        schedule_recurrence_label = st.selectbox(
+            "Repeats",
+            options=["Every week", "Every 2 weeks"],
+            key="schedule_recurrence",
+        )
+        schedule_recurrence = (
+            1 if schedule_recurrence_label == "Every week" else 2
+        )
+
+        schedule_start_date = st.date_input(
+            "Date of first occurrence",
+            value=date.today(),
+            key="schedule_start_date",
+        )
+
+        schedule_submitted = st.form_submit_button(
+            "Save Routine Entry"
+        )
+
+    if schedule_submitted:
+        schedule_payload = {
+            "course_code": schedule_course,
+            "day_of_week": schedule_day,
+            "start_time": schedule_start.strftime("%H:%M"),
+            "end_time": schedule_end.strftime("%H:%M"),
+            "session_type": schedule_type,
+            "recurrence_weeks": schedule_recurrence,
+            "start_date": schedule_start_date.isoformat(),
+        }
+
+        try:
+            entry = add_schedule_entry(schedule_payload)
+            st.success(
+                f"Saved routine entry #{entry['schedule_id']}."
+            )
+        except (ValueError, KeyError, TypeError) as error:
+            st.error(f"Could not save routine entry: {error}")
+
+    schedule_entries = get_schedule_entries()
+
+    st.subheader("Saved Routine")
+
+    if schedule_entries:
+        schedule_rows = []
+
+        for entry in schedule_entries:
+            schedule_rows.append({
+                "ID": entry["schedule_id"],
+                "Course": entry["course_code"],
+                "Day": day_names[entry["day_of_week"]],
+                "Start": entry["start_time"],
+                "End": entry["end_time"],
+                "Type": entry["session_type"],
+                "Repeats": (
+                    "Every week"
+                    if entry["recurrence_weeks"] == 1
+                    else "Every 2 weeks"
+                ),
+                "First occurrence": entry["start_date"],
+            })
+
+        st.dataframe(
+            pd.DataFrame(schedule_rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        schedule_ids = [
+            entry["schedule_id"] for entry in schedule_entries
+        ]
+        schedule_labels = {
+            entry["schedule_id"]: (
+                f"#{entry['schedule_id']} — {entry['course_code']}"
+            )
+            for entry in schedule_entries
+        }
+
+        with st.form("delete_schedule_form"):
+            selected_schedule_id = st.selectbox(
+                "Routine entry to remove",
+                options=schedule_ids,
+                format_func=lambda entry_id: schedule_labels[entry_id],
+            )
+
+            delete_submitted = st.form_submit_button(
+                "Remove Routine Entry"
+            )
+
+        if delete_submitted:
+            delete_schedule_entry(selected_schedule_id)
+            st.success(
+                f"Removed routine entry #{selected_schedule_id}."
+            )
+            st.rerun()
+
+    else:
+        st.info("No routine entries yet. Add your first class above.")
+
+else:
+    st.info("Register your courses before creating a weekly routine.")
 
 st.divider()
 

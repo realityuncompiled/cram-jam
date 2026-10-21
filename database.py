@@ -258,6 +258,23 @@ def initialize_database():
                 FOREIGN KEY (course_code)
                     REFERENCES courses(course_code)
             );
+
+            CREATE TABLE IF NOT EXISTS weekly_schedule (
+                schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                course_code TEXT NOT NULL,
+                day_of_week INTEGER NOT NULL
+                    CHECK (day_of_week BETWEEN 0 AND 6),
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                session_type TEXT NOT NULL
+                    CHECK (session_type IN ('Lecture', 'Lab', 'Tutorial', 'Other')),
+                recurrence_weeks INTEGER NOT NULL DEFAULT 1
+                    CHECK (recurrence_weeks IN (1, 2)),
+                start_date TEXT NOT NULL,
+                FOREIGN KEY (course_code)
+                    REFERENCES courses(course_code),
+                CHECK (end_time > start_time)
+            );
             """
         )
         ensure_tasks_table(connection)
@@ -443,6 +460,105 @@ def get_study_sessions(course_code=None):
 
     with get_connection() as connection:
         return connection.execute(query, params).fetchall()
+
+
+def add_schedule_entry(entry):
+    required_fields = (
+        "course_code",
+        "day_of_week",
+        "start_time",
+        "end_time",
+        "session_type",
+        "start_date",
+    )
+
+    for field in required_fields:
+        if field not in entry or entry[field] in (None, ""):
+            raise ValueError(f"{field} is required.")
+
+    course_code = normalize_course_code(entry["course_code"])
+
+    try:
+        day = int(entry["day_of_week"])
+        recurrence = int(entry.get("recurrence_weeks", 1))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Day and recurrence must be whole numbers.") from exc
+
+    if day not in range(7):
+        raise ValueError("Day of week must be between 0 and 6.")
+
+    if recurrence not in (1, 2):
+        raise ValueError("Recurrence must be 1 or 2 weeks.")
+
+    start_time = str(entry["start_time"]).strip()
+    end_time = str(entry["end_time"]).strip()
+
+    try:
+        start = datetime.strptime(start_time, "%H:%M").time()
+        end = datetime.strptime(end_time, "%H:%M").time()
+    except ValueError as exc:
+        raise ValueError("Times must use HH:MM format.") from exc
+
+    if end <= start:
+        raise ValueError("End time must be after start time.")
+
+    session_type = str(entry["session_type"]).strip().title()
+    if session_type not in ("Lecture", "Lab", "Tutorial", "Other"):
+        raise ValueError("Invalid session type.")
+
+    try:
+        start_date = date.fromisoformat(
+            str(entry["start_date"])
+        ).isoformat()
+    except ValueError as exc:
+        raise ValueError(
+            "Start date must use YYYY-MM-DD format."
+        ) from exc
+
+    if date.fromisoformat(start_date).weekday() != day:
+        raise ValueError("The first occurrence date must match the selected day.")
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO weekly_schedule (
+                course_code, day_of_week, start_time, end_time,
+                session_type, recurrence_weeks, start_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                course_code, day, start_time, end_time,
+                session_type, recurrence, start_date,
+            ),
+        )
+
+        schedule_id = connection.execute(
+            "SELECT last_insert_rowid()"
+        ).fetchone()[0]
+
+        return connection.execute(
+            "SELECT * FROM weekly_schedule WHERE schedule_id = ?",
+            (schedule_id,),
+        ).fetchone()
+
+
+def get_schedule_entries():
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT *
+            FROM weekly_schedule
+            ORDER BY day_of_week, start_time, course_code
+            """
+        ).fetchall()
+
+
+def delete_schedule_entry(schedule_id):
+    with get_connection() as connection:
+        connection.execute(
+            "DELETE FROM weekly_schedule WHERE schedule_id = ?",
+            (int(schedule_id),),
+        )
 
 
 if __name__ == "__main__":
