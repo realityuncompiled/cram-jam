@@ -1,8 +1,9 @@
 
 from datetime import date, datetime, time
+from commander import audit_workload
 
-import pandas as pd
-import streamlit as st
+import pandas as pd  # type: ignore[reportMissingModuleSource]
+import streamlit as st  # type: ignore[reportMissingImports]
 
 from database import (
     add_courses,
@@ -31,6 +32,99 @@ st.subheader("Your academic pressure, made visible.")
 st.write(
     "Register your semester courses once. "
     "You can add academic tasks to each course later."
+)
+
+st.divider()
+
+# THE COMMANDER
+commander_report = audit_workload(get_tasks())
+
+state_styles = {
+    "MONITORING": "info",
+    "COMMANDING": "info",
+    "STRATEGIZING": "warning",
+    "ENRAGED": "error",
+}
+
+state = commander_report["state"]
+state_style = state_styles[state]
+
+st.header("The Commander's Office")
+st.caption(f"CURRENT STATE: {state}")
+
+if state_style == "error":
+    st.error(commander_report["message"])
+elif state_style == "warning":
+    st.warning(commander_report["message"])
+else:
+    st.info(commander_report["message"])
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric(
+    "Outstanding tasks",
+    commander_report["outstanding_count"],
+)
+col2.metric(
+    "Overdue",
+    commander_report["overdue_count"],
+)
+col3.metric(
+    "Deadlines within 72h",
+    commander_report["approaching_count"],
+)
+
+next_task = commander_report["next_task"]
+
+if next_task:
+    st.subheader("Your next directive")
+
+    st.markdown(f"**{next_task['title']}**")
+    st.caption(
+        f"{next_task['course_code']} · "
+        f"{next_task['task_type']} · "
+        f"{next_task['priority'].title()} priority"
+    )
+
+    if next_task["is_overdue"]:
+        st.write(
+            "The deadline has passed. This task remains outstanding. "
+            "Assess what can still be submitted and act accordingly."
+        )
+    else:
+        hours = next_task["hours_remaining"]
+
+        if hours <= 24:
+            deadline_text = "Due within 24 hours."
+        elif hours <= 72:
+            deadline_text = "Due within 3 days."
+        elif hours <= 168:
+            deadline_text = "Due within 7 days."
+        else:
+            deadline_text = "More than 7 days remain."
+
+        st.write(deadline_text)
+
+    minutes = next_task["estimated_minutes"]
+    st.write(
+        f"Estimated work: {minutes // 60}h {minutes % 60}m."
+    )
+
+    st.caption(
+        "Why this task? It ranks first under the current rules: "
+        "deadline urgency, then priority, then deadline and task ID."
+    )
+
+else:
+    st.write(
+        "Nothing outstanding. Enjoy the quiet. "
+        "The ledger will be reviewed again when you add work."
+    )
+
+st.caption(
+    f"Total estimated outstanding work: "
+    f"{commander_report['estimated_minutes'] // 60}h "
+    f"{commander_report['estimated_minutes'] % 60}m"
 )
 
 st.divider()
