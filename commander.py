@@ -86,52 +86,44 @@ def audit_workload(tasks, now=None):
         task["estimated_minutes"] for task in outstanding
     )
 
-    # State precedence: imminent danger first, then deadline clusters.
-    if overdue or any(
-        task["hours_remaining"] <= 24 for task in outstanding
-    ):
+    if not outstanding:
+        state = "MONITORING"
+        message = (
+            "No outstanding tasks. An unexpectedly orderly situation. "
+            "Enjoy the quiet; the ledger will be reviewed again."
+        )
+
+    elif overdue:
+        state = "STRATEGIZING"
+        message = (
+            f"{len(overdue)} overdue task(s). The original timeline "
+            "has been compromised. First, determine which deadlines "
+            "can still be recovered. We plan from reality, not wishful thinking."
+        )
+
+    elif any(t["hours_remaining"] <= 24 for t in outstanding):
         state = "ENRAGED"
+        message = (
+            "A deadline is less than 24 hours away. "
+            "No more expanding the plan. Execute the next directive."
+        )
+
     elif len(approaching) >= 3:
         state = "STRATEGIZING"
-    elif outstanding:
-        state = "COMMANDING"
+        message = (
+            f"{len(approaching)} deadlines fall within the next 72 hours. "
+            "We are reorganizing the board before these deadlines "
+            "organize us."
+        )
+
     else:
-        state = "MONITORING"
+        state = "COMMANDING"
+        message = (
+            "I've reviewed the outstanding workload. We have a next move. "
+            "Do try to keep up."
+        )
 
     next_task = outstanding[0] if outstanding else None
-
-    if state == "ENRAGED":
-        if overdue:
-            message = (
-                f"{len(overdue)} overdue task(s). "
-                "The original timeline has been compromised. "
-                "We address the most urgent outstanding task first."
-            )
-        else:
-            message = (
-                "A deadline is less than 24 hours away. "
-                "Stop expanding the plan. Execute the next directive."
-            )
-
-    elif state == "STRATEGIZING":
-        message = (
-            f"{len(approaching)} deadlines fall within the next "
-            "72 hours. We are reorganizing the board before "
-            "these deadlines organize us."
-        )
-
-    elif next_task:
-        message = (
-            "I've reviewed the outstanding workload. "
-            "We have a next move. Do try to keep up."
-        )
-
-    else:
-        message = (
-            "No outstanding tasks. "
-            "An unexpectedly orderly situation. "
-            "Enjoy it; we will review the next campaign soon."
-        )
 
     return {
         "state": state,
