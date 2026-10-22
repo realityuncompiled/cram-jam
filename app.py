@@ -25,6 +25,66 @@ st.set_page_config(
     layout="wide",
 )
 
+st.markdown(
+    """
+    <style>
+    /* The Chancellor's visual language */
+    h1, h2, h3 {
+        font-family: Georgia, "Times New Roman", serif !important;
+        letter-spacing: 0.02em;
+    }
+
+    h1 {
+        color: #F0E8DC;
+        font-weight: 500;
+    }
+
+    h2, h3 {
+        color: #D9C5B0;
+        font-weight: 500;
+    }
+
+    /* Restrained gold for labels and milestones */
+    [data-testid="stMetricLabel"] {
+        color: #C69B58;
+    }
+
+    [data-testid="stMetricValue"] {
+        color: #F0E8DC;
+    }
+
+    /* Structured tabs */
+    button[data-baseweb="tab"] {
+        font-weight: 600;
+    }
+
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #E1B66C;
+    }
+
+    /* Burgundy actions, without flooding the screen */
+    .stButton > button[kind="primary"],
+    .stFormSubmitButton > button {
+        border-radius: 5px;
+        font-weight: 600;
+    }
+
+    /* Quiet borders around secondary work areas */
+    [data-testid="stExpander"] {
+        border: 1px solid #40363B;
+        border-radius: 6px;
+    }
+
+    /* Keep the page readable and avoid overly wide text */
+    [data-testid="stAppViewContainer"] {
+        font-size: 15px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 initialize_database()
 
 st.title("Cram Jam")
