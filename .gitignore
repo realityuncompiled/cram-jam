@@ -228,3 +228,7 @@ __pycache__/
 
 # Streamlit secrets
 .streamlit/secrets.toml
+
+cram_jam_backup_*.db
+
+cram_jam.db
