@@ -17,6 +17,7 @@ from database import (
     add_schedule_entry,
     delete_schedule_entry,
     get_schedule_entries,
+    delete_course,
 )
 
 st.set_page_config(
@@ -362,6 +363,69 @@ with tab_courses:
         st.info(
             "No courses registered yet. Add your semester courses above."
         )
+
+    st.subheader("Remove a Course")
+
+    if courses:
+        st.warning(
+            "Deleting a course permanently removes its tasks, "
+            "study history, and weekly routine entries too."
+        )
+
+        course_options = {
+            f"{course['course_code']} — {course['name']}": (
+                course["course_code"]
+            )
+            for course in courses
+        }
+
+        with st.form("delete_course_form"):
+            selected_course_label = st.selectbox(
+                "Course to delete",
+                options=list(course_options.keys()),
+            )
+
+            confirm_delete = st.checkbox(
+                "I understand that this action cannot be undone."
+            )
+
+            delete_submitted = st.form_submit_button(
+                "Delete Course",
+                type="primary",
+            )
+
+        if delete_submitted:
+            if not confirm_delete:
+                st.error("Confirm the deletion before proceeding.")
+            else:
+                selected_code = course_options[
+                    selected_course_label
+                ]
+
+                try:
+                    deleted = delete_course(selected_code)
+
+                    st.success(
+                        f"Deleted {selected_code}. "
+                        f"Also removed {deleted['tasks']} task(s), "
+                        f"{deleted['study_sessions']} study "
+                        f"session(s), and "
+                        f"{deleted['weekly_schedule']} routine "
+                        f"entry/entries."
+                    )
+                    st.rerun()
+
+                except ValueError as error:
+                    st.error(str(error))
+
+                except Exception:
+                    st.error(
+                        "Could not delete the course. "
+                        "The database transaction was rolled back. "
+                        "Check the terminal for details."
+                    )
+    else:
+        st.info("There are no courses to delete.")
 
     st.divider()
 

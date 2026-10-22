@@ -334,6 +334,42 @@ def get_courses():
         ).fetchall()
 
 
+def delete_course(course_code):
+    """Delete a course and all records associated with it."""
+    code = normalize_course_code(course_code)
+
+    with get_connection() as connection:
+        course = connection.execute(
+            "SELECT 1 FROM courses WHERE course_code = ?",
+            (code,),
+        ).fetchone()
+
+        if course is None:
+            raise ValueError(f"Course {code} was not found.")
+
+        deleted_counts = {}
+
+        related_tables = (
+            "tasks",
+            "study_sessions",
+            "weekly_schedule",
+        )
+
+        for table in related_tables:
+            cursor = connection.execute(
+                f"DELETE FROM {table} WHERE course_code = ?",
+                (code,),
+            )
+            deleted_counts[table] = cursor.rowcount
+
+        connection.execute(
+            "DELETE FROM courses WHERE course_code = ?",
+            (code,),
+        )
+
+        return deleted_counts
+
+
 def add_task(task):
     required_fields = ("course_code", "title", "task_type", "deadline")
     for field_name in required_fields:
