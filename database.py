@@ -389,6 +389,61 @@ def add_task(task):
         ).fetchone()
 
 
+def update_task(task_id, task):
+    required_fields = ("course_code", "title", "task_type", "deadline")
+    for field_name in required_fields:
+        if field_name not in task or task[field_name] in (None, ""):
+            raise ValueError(f"{field_name} is required.")
+
+    course_code = normalize_course_code(task["course_code"])
+    title = str(task["title"]).strip()
+    if not title:
+        raise ValueError("Task title cannot be empty.")
+
+    task_type = str(task["task_type"]).strip() or "General"
+    deadline = normalize_datetime(task["deadline"], "deadline")
+
+    estimated_minutes = int(task.get("estimated_minutes", 0))
+    if estimated_minutes < 0:
+        raise ValueError("Estimated minutes cannot be negative.")
+
+    status = normalize_status(task.get("status", "pending"))
+    priority = normalize_priority(task.get("priority", "medium"))
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE tasks
+            SET course_code = ?,
+                title = ?,
+                task_type = ?,
+                deadline = ?,
+                estimated_minutes = ?,
+                status = ?,
+                priority = ?
+            WHERE task_id = ?
+            """,
+            (
+                course_code,
+                title,
+                task_type,
+                deadline,
+                estimated_minutes,
+                status,
+                priority,
+                int(task_id),
+            ),
+        )
+
+        if cursor.rowcount == 0:
+            raise ValueError(f"Task {task_id} was not found.")
+
+        return connection.execute(
+            "SELECT * FROM tasks WHERE task_id = ?",
+            (int(task_id),),
+        ).fetchone()
+
+
 def get_tasks(course_code=None):
     query = "SELECT * FROM tasks"
     params = []
