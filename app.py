@@ -1,5 +1,5 @@
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from commander import audit_workload
 
 import pandas as pd  # type: ignore[reportMissingModuleSource]
@@ -517,19 +517,46 @@ with tab_routine:
         st.subheader("Your Weekly Classes")
 
         if schedule_entries:
-            # Look up subject names without changing the database.
             course_names = {
                 course["course_code"]: course["name"]
                 for course in courses
             }
 
-            # Group routine entries by day.
+            # Find Monday of the current week.
+            today = date.today()
+            monday = today - timedelta(days=today.weekday())
+
             entries_by_day = {day: [] for day in range(7)}
 
             for entry in schedule_entries:
-                entries_by_day[entry["day_of_week"]].append(entry)
+                day_number = entry["day_of_week"]
+                class_date = monday + timedelta(days=day_number)
 
-            # Display each day in weekday order.
+                first_date = date.fromisoformat(
+                    str(entry["start_date"])
+                )
+                recurrence_weeks = entry["recurrence_weeks"]
+
+                # Determine the week containing the first occurrence.
+                first_monday = first_date - timedelta(
+                    days=first_date.weekday()
+                )
+                weeks_since_first = (
+                    (monday - first_monday).days // 7
+                )
+
+                # Show the class if this week belongs to its
+                # recurrence cycle, including its first week.
+                if weeks_since_first < 0:
+                    continue
+                if weeks_since_first % recurrence_weeks != 0:
+                    continue
+
+                entries_by_day[day_number].append(entry)
+
+            displayed_count = 0
+            displayed_days = 0
+
             for day_number, day_name in enumerate(day_names):
                 day_entries = sorted(
                     entries_by_day[day_number],
@@ -539,22 +566,19 @@ with tab_routine:
                 if not day_entries:
                     continue
 
-                st.markdown(f"### {day_name}")
+                class_date = monday + timedelta(days=day_number)
+
+                st.markdown(
+                    f"### {day_name} · {class_date.strftime('%d %b')}"
+                )
+
+                displayed_days += 1
+                displayed_count += len(day_entries)
 
                 for entry in day_entries:
                     course_code = entry["course_code"]
                     subject_name = course_names.get(
                         course_code, course_code
-                    )
-
-                    start = entry["start_time"]
-                    end = entry["end_time"]
-                    session_type = entry["session_type"]
-
-                    recurrence = (
-                        "Every week"
-                        if entry["recurrence_weeks"] == 1
-                        else "Every 2 weeks"
                     )
 
                     with st.container(border=True):
@@ -565,46 +589,57 @@ with tab_routine:
                         with details_col:
                             st.markdown(f"**{subject_name}**")
                             st.caption(
-                                f"{course_code} · {session_type}"
+                                f"{course_code} · "
+                                f"{entry['session_type']}"
                             )
 
                         with time_col:
-                            st.markdown(f"**{start} – {end}**")
-                            st.caption(recurrence)
+                            st.markdown(
+                                f"**{entry['start_time']} – "
+                                f"{entry['end_time']}**"
+                            )
+
+                            recurrence_label = (
+                                "Every week"
+                                if entry["recurrence_weeks"] == 1
+                                else "Every 2 weeks"
+                            )
+                            st.caption(recurrence_label)
 
                         with action_col:
                             with st.popover("Manage"):
                                 st.caption(
-                                    f"Routine entry #{entry['schedule_id']}"
+                                    f"Routine entry "
+                                    f"#{entry['schedule_id']}"
                                 )
                                 st.write(
-                                    f"First class: {entry['start_date']}"
+                                    f"First occurrence: "
+                                    f"{entry['start_date']}"
                                 )
 
                                 if st.button(
                                     "Remove class",
-                                    key=f"delete_schedule_{entry['schedule_id']}",
-                                    type="secondary",
+                                    key=(
+                                        f"delete_schedule_"
+                                        f"{entry['schedule_id']}"
+                                    ),
                                 ):
-                                    try:
-                                        delete_schedule_entry(
-                                            entry["schedule_id"]
-                                        )
-                                        st.toast("Class removed.")
-                                        st.rerun()
-                                    except Exception:
-                                        st.error(
-                                            "Could not remove this class. "
-                                            "Check the terminal for details."
-                                        )
+                                    delete_schedule_entry(
+                                        entry["schedule_id"]
+                                    )
+                                    st.toast("Class removed.")
+                                    st.rerun()
 
-            st.divider()
-            st.caption(
-                f"{len(schedule_entries)} scheduled class "
-                f"entry/entries across "
-                f"{sum(bool(entries) for entries in entries_by_day.values())} "
-                "day(s)."
-            )
+            if displayed_count == 0:
+                st.info(
+                    "No classes are scheduled for this week."
+                )
+            else:
+                st.divider()
+                st.caption(
+                    f"{displayed_count} class session(s) scheduled "
+                    f"across {displayed_days} day(s) this week."
+                )
 
         else:
             st.info(
