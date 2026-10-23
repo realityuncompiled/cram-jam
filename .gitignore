@@ -232,3 +232,5 @@ __pycache__/
 cram_jam_backup_*.db
 
 cram_jam.db
+
+cram_jam_before_reset_20261023_102942.db

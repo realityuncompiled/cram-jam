@@ -514,63 +514,103 @@ with tab_routine:
 
         schedule_entries = get_schedule_entries()
 
-        st.subheader("Saved Routine")
+        st.subheader("Your Weekly Classes")
 
         if schedule_entries:
-            schedule_rows = []
+            # Look up subject names without changing the database.
+            course_names = {
+                course["course_code"]: course["name"]
+                for course in courses
+            }
+
+            # Group routine entries by day.
+            entries_by_day = {day: [] for day in range(7)}
 
             for entry in schedule_entries:
-                schedule_rows.append({
-                    "ID": entry["schedule_id"],
-                    "Course": entry["course_code"],
-                    "Day": day_names[entry["day_of_week"]],
-                    "Start": entry["start_time"],
-                    "End": entry["end_time"],
-                    "Type": entry["session_type"],
-                    "Repeats": (
+                entries_by_day[entry["day_of_week"]].append(entry)
+
+            # Display each day in weekday order.
+            for day_number, day_name in enumerate(day_names):
+                day_entries = sorted(
+                    entries_by_day[day_number],
+                    key=lambda entry: entry["start_time"],
+                )
+
+                if not day_entries:
+                    continue
+
+                st.markdown(f"### {day_name}")
+
+                for entry in day_entries:
+                    course_code = entry["course_code"]
+                    subject_name = course_names.get(
+                        course_code, course_code
+                    )
+
+                    start = entry["start_time"]
+                    end = entry["end_time"]
+                    session_type = entry["session_type"]
+
+                    recurrence = (
                         "Every week"
                         if entry["recurrence_weeks"] == 1
                         else "Every 2 weeks"
-                    ),
-                    "First occurrence": entry["start_date"],
-                })
+                    )
 
-            st.dataframe(
-                pd.DataFrame(schedule_rows),
-                use_container_width=True,
-                hide_index=True,
+                    with st.container(border=True):
+                        details_col, time_col, action_col = st.columns(
+                            [3, 2, 1]
+                        )
+
+                        with details_col:
+                            st.markdown(f"**{subject_name}**")
+                            st.caption(
+                                f"{course_code} · {session_type}"
+                            )
+
+                        with time_col:
+                            st.markdown(f"**{start} – {end}**")
+                            st.caption(recurrence)
+
+                        with action_col:
+                            with st.popover("Manage"):
+                                st.caption(
+                                    f"Routine entry #{entry['schedule_id']}"
+                                )
+                                st.write(
+                                    f"First class: {entry['start_date']}"
+                                )
+
+                                if st.button(
+                                    "Remove class",
+                                    key=f"delete_schedule_{entry['schedule_id']}",
+                                    type="secondary",
+                                ):
+                                    try:
+                                        delete_schedule_entry(
+                                            entry["schedule_id"]
+                                        )
+                                        st.toast("Class removed.")
+                                        st.rerun()
+                                    except Exception:
+                                        st.error(
+                                            "Could not remove this class. "
+                                            "Check the terminal for details."
+                                        )
+
+            st.divider()
+            st.caption(
+                f"{len(schedule_entries)} scheduled class "
+                f"entry/entries across "
+                f"{sum(bool(entries) for entries in entries_by_day.values())} "
+                "day(s)."
             )
 
-            schedule_ids = [
-                entry["schedule_id"] for entry in schedule_entries
-            ]
-            schedule_labels = {
-                entry["schedule_id"]: (
-                    f"#{entry['schedule_id']} — {entry['course_code']}"
-                )
-                for entry in schedule_entries
-            }
-
-            with st.form("delete_schedule_form"):
-                selected_schedule_id = st.selectbox(
-                    "Routine entry to remove",
-                    options=schedule_ids,
-                    format_func=lambda entry_id: schedule_labels[entry_id],
-                )
-
-                delete_submitted = st.form_submit_button(
-                    "Remove Routine Entry"
-                )
-
-            if delete_submitted:
-                delete_schedule_entry(selected_schedule_id)
-                st.success(
-                    f"Removed routine entry #{selected_schedule_id}."
-                )
-                st.rerun()
-
         else:
-            st.info("No routine entries yet. Add your first class above.")
+            st.info(
+                "No classes scheduled yet. "
+                "Add your first class using the form above."
+            )
 
     else:
         st.info("Register your courses before creating a weekly routine.")
