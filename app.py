@@ -579,6 +579,24 @@ with tab_routine:
 
 with tab_tasks:
     st.header("Task Planner")
+    commander_lines = {
+        "Quiz": (
+            "A quiz. The Commander has been informed. "
+            "You may stop pretending this is a surprise."
+        ),
+        "Assignment": (
+            "Another contribution to the academic archives. "
+            "Your suffering has been properly documented."
+        ),
+        "Exam": (
+            "An exam. The Commander is pacing. "
+            "You, meanwhile, had better have a plan."
+        ),
+        "Meeting": (
+            "An audience has been scheduled. How official. "
+            "Shall I have the dungeons prepared?"
+        ),
+    }
 
     if courses:
         with st.form("task_registration_form"):
@@ -589,7 +607,10 @@ with tab_tasks:
             task_title = st.text_input("Task title")
             task_type = st.selectbox(
                 "Task type",
-                options=["Assignment", "Reading", "Quiz", "Project", "Exam", "Other"],
+                options=[
+                    "Assignment", "Reading", "Quiz",
+                    "Project", "Exam", "Meeting", "Other",
+                ],
             )
             deadline_date = st.date_input("Deadline date")
             deadline_time = st.time_input("Deadline time", value=datetime.strptime("18:00", "%H:%M").time())
@@ -627,6 +648,11 @@ with tab_tasks:
                 try:
                     task = add_task(task_payload)
                     st.success(f"Saved task #{task['task_id']}: {task['title']}")
+                    if task["task_type"] in commander_lines:
+                        st.toast(
+                            commander_lines[task["task_type"]],
+                            icon="🕯️",
+                        )
                 except ValueError as error:
                     st.error(f"Could not save task: {error}")
 
@@ -677,7 +703,8 @@ with tab_tasks:
                     )
 
                     task_types = [
-                        "Assignment", "Reading", "Quiz", "Project", "Exam", "Other"
+                        "Assignment", "Reading", "Quiz",
+                        "Project", "Exam", "Meeting", "Other",
                     ]
                     current_type = selected_task["task_type"]
                     if current_type not in task_types:
